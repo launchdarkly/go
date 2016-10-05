@@ -3805,24 +3805,23 @@ func GenUuid() (string, error) {
 func encodeNonASCIIChars(message string) string {
 	runeOfMessage := []rune(message)
 	lenOfRune := len(runeOfMessage)
-	encodedString := ""
+	encodedString := bytes.NewBuffer(make([]byte, 0, lenOfRune))
 	for i := 0; i < lenOfRune; i++ {
 		intOfRune := uint16(runeOfMessage[i])
 		if intOfRune > 127 {
 			hexOfRune := strconv.FormatUint(uint64(intOfRune), 16)
 			dataLen := len(hexOfRune)
 			paddingNum := 4 - dataLen
-			prefix := ""
+			encodedString.WriteString(`\u`)
 			for i := 0; i < paddingNum; i++ {
-				prefix += "0"
+				encodedString.WriteString("0")
 			}
-			hexOfRune = prefix + hexOfRune
-			encodedString += bytes.NewBufferString(`\u` + hexOfRune).String()
+			encodedString.WriteString(hexOfRune)
 		} else {
-			encodedString += string(runeOfMessage[i])
+			encodedString.WriteString(string(runeOfMessage[i]))
 		}
 	}
-	return encodedString
+	return encodedString.String()
 }
 
 // EncryptString creates the base64 encoded encrypted string using the cipherKey.
