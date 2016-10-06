@@ -171,9 +171,6 @@ var (
 
 	// Logger for warn messages
 	warnLogger *log.Logger
-
-	//logMutex
-	logMu sync.Mutex
 )
 
 var (
@@ -303,10 +300,8 @@ type PubnubUnitTest struct {
 // returns the pointer to Pubnub instance.
 func NewPubnub(publishKey string, subscribeKey string, secretKey string, cipherKey string, sslOn bool, customUuid string) *Pubnub {
 	initLogging()
-	logMu.Lock()
 	infoLogger.Println(fmt.Sprintf("Pubnub Init, %s", VersionInfo()))
 	infoLogger.Println(fmt.Sprintf("OS: %s", runtime.GOOS))
-	logMu.Unlock()
 
 	newPubnub := &Pubnub{}
 	newPubnub.origin = origin
@@ -330,9 +325,7 @@ func NewPubnub(publishKey string, subscribeKey string, secretKey string, cipherK
 		newPubnub.origin = "http://" + newPubnub.origin
 	}
 
-	logMu.Lock()
 	infoLogger.Println(fmt.Sprintf("Origin: %s", newPubnub.origin))
-	logMu.Unlock()
 	//Generate the uuid is custmUuid is not provided
 	newPubnub.SetUUID(customUuid)
 
@@ -343,8 +336,6 @@ var once sync.Once
 
 // initLogging initaites the log file if loggingEnabled is true
 func initLogging() {
-	logMu.Lock()
-	defer logMu.Unlock()
 	onceBody := func() {
 		infoLogger = log.New(logfileWriter, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 		errorLogger = log.New(logfileWriter, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
@@ -435,9 +426,7 @@ func (pub *Pubnub) SetUUID(val string) {
 		if err == nil {
 			pub.uuid = url.QueryEscape(uuid)
 		} else {
-			logMu.Lock()
 			errorLogger.Println(err.Error())
-			logMu.Unlock()
 		}
 	} else {
 		pub.uuid = url.QueryEscape(val)
@@ -580,9 +569,7 @@ func (pub *Pubnub) Abort() {
 		value, _, err := pub.sendLeaveRequest(subscribedChannels, subscribedGroups)
 
 		if err != nil {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("Request aborted error:%s", err.Error()))
-			logMu.Unlock()
 
 			pub.sendSubscribeError(subscribedChannels, subscribedGroups,
 				err.Error(), responseAsIsError)
@@ -590,9 +577,7 @@ func (pub *Pubnub) Abort() {
 			pub.sendSuccessResponse(subscribedChannels, subscribedGroups, value)
 		}
 
-		logMu.Lock()
 		infoLogger.Println(fmt.Sprintf("Request aborted for channels: %s", subscribedChannels))
-		logMu.Unlock()
 
 		pub.Lock()
 		pub.channels.Abort()
@@ -604,9 +589,7 @@ func (pub *Pubnub) Abort() {
 	defer nonSubscribeTransportMu.Unlock()
 
 	if conn != nil {
-		logMu.Lock()
 		infoLogger.Println(fmt.Sprintf("Closing conn"))
-		logMu.Unlock()
 		conn.Close()
 	}
 
@@ -622,9 +605,7 @@ func (pub *Pubnub) Abort() {
 func (pub *Pubnub) closePresenceHeartbeatConnection() {
 	presenceHeartbeatTransportMu.Lock()
 	if presenceHeartbeatConn != nil {
-		logMu.Lock()
 		infoLogger.Println(fmt.Sprintf("Closing presence conn"))
-		logMu.Unlock()
 		presenceHeartbeatConn.Close()
 	}
 	presenceHeartbeatTransportMu.Unlock()
@@ -634,9 +615,7 @@ func (pub *Pubnub) closePresenceHeartbeatConnection() {
 func (pub *Pubnub) closeRetryConnection() {
 	retryTransportMu.Lock()
 	if retryConn != nil {
-		logMu.Lock()
 		infoLogger.Println(fmt.Sprintf("Closing retry conn"))
-		logMu.Unlock()
 		retryConn.Close()
 	}
 	retryTransportMu.Unlock()
@@ -1019,14 +998,10 @@ func (pub *Pubnub) executePam(entity, requestURL string,
 
 		if err != nil {
 			message = err.Error()
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("PAM Error: %s", message))
-			logMu.Unlock()
 		} else {
 			message = fmt.Sprintf("%s", value)
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("PAM Error: responseCode %d, message %s", responseCode, message))
-			logMu.Unlock()
 		}
 
 		if strings.TrimSpace(entity) == "" {
@@ -1084,16 +1059,12 @@ func (pub *Pubnub) executeTime(callbackChannel chan []byte, errorChannel chan []
 	value, _, err := pub.httpRequest(timeURL, nonSubscribeTrans)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("Time Error: %s", err.Error()))
-		logMu.Unlock()
 		sendResponseWithoutChannel(errorChannel, err.Error())
 	} else {
 		_, _, _, errJSON := ParseJSON(value, pub.cipherKey)
 		if errJSON != nil && strings.Contains(errJSON.Error(), invalidJSON) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("Time Error: %s", errJSON.Error()))
-			logMu.Unlock()
 			sendResponseWithoutChannel(errorChannel, err.Error())
 			if count < maxRetries {
 				count++
@@ -1120,9 +1091,7 @@ func (pub *Pubnub) sendPublishRequest(channel, publishURLString string,
 
 	u := &url.URL{Path: string(jsonBytes)}
 	encodedPath := u.String()
-	logMu.Lock()
 	infoLogger.Println(fmt.Sprintf("Publish: json: %s, encoded: %s", string(jsonBytes), encodedPath))
-	logMu.Unlock()
 
 	publishURL := fmt.Sprintf("%s%s", publishURLString, encodedPath)
 	publishURL = fmt.Sprintf("%s?%s&uuid=%s%s", publishURL,
@@ -1146,33 +1115,23 @@ func (pub *Pubnub) sendPublishRequest(channel, publishURLString string,
 					sendErrorResponseExtended(errorChannel, channel, string(value), strconv.Itoa(responseCode))
 				}
 			} else {
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("Publish Error: %s", errJSON.Error()))
-				logMu.Unlock()
 				sendErrorResponseExtended(errorChannel, channel, string(value), strconv.Itoa(responseCode))
 			}
 		} else if (err != nil) && (responseCode > 0) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("Publish Failed: %s, ResponseCode: %d", err.Error(), responseCode))
-			logMu.Unlock()
 			sendErrorResponseExtended(errorChannel, channel, err.Error(), strconv.Itoa(responseCode))
 		} else if err != nil {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("Publish Failed: %s", err.Error()))
-			logMu.Unlock()
 			sendErrorResponse(errorChannel, channel, err.Error())
 		} else {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("Publish Failed: ResponseCode: %d", responseCode))
-			logMu.Unlock()
 			sendErrorResponseExtended(errorChannel, channel, publishFailed, strconv.Itoa(responseCode))
 		}
 	} else {
 		_, _, _, errJSON := ParseJSON(value, pub.cipherKey)
 		if errJSON != nil && strings.Contains(errJSON.Error(), invalidJSON) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("Publish Error: %s", errJSON.Error()))
-			logMu.Unlock()
 			sendErrorResponse(errorChannel, channel, errJSON.Error())
 		} else {
 			callbackChannel <- []byte(fmt.Sprintf("%s", value))
@@ -1184,9 +1143,7 @@ func encodeURL(urlString string) string {
 	var reqURL *url.URL
 	reqURL, urlErr := url.Parse(urlString)
 	if urlErr != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("Url encoding error: %s", urlErr.Error()))
-		logMu.Unlock()
 		return urlString
 	}
 	q := reqURL.Query()
@@ -1199,9 +1156,7 @@ func encodeURL(urlString string) string {
 // Returns false is the message is acceptable.
 func invalidMessage(message interface{}) bool {
 	if message == nil {
-		logMu.Lock()
 		warnLogger.Println(fmt.Sprintf("Message nil"))
-		logMu.Unlock()
 		return true
 	}
 
@@ -1238,9 +1193,7 @@ func invalidChannel(channel string, c chan<- []byte) bool {
 
 	for i := 0; i < len(channelArray); i++ {
 		if strings.TrimSpace(channelArray[i]) == "" {
-			logMu.Lock()
 			warnLogger.Println(fmt.Sprintf("Channel empty"))
-			logMu.Unlock()
 			c <- []byte(fmt.Sprintf("Invalid Channel: %s", channel))
 			return true
 		}
@@ -1304,9 +1257,7 @@ func (pub *Pubnub) PublishExtended(channel string, message interface{},
 	checkCallbackNil(errorChannel, true, "Publish")
 
 	if pub.publishKey == "" {
-		logMu.Lock()
 		warnLogger.Println(fmt.Sprintf("Publish key empty"))
-		logMu.Unlock()
 		sendErrorResponse(errorChannel, channel, "Publish key required.")
 		return
 	}
@@ -1358,9 +1309,7 @@ func (pub *Pubnub) PublishExtended(channel string, message interface{},
 			//Encrypt and Serialize
 			jsonEncBytes, errEnc := json.Marshal(EncryptString(pub.cipherKey, fmt.Sprintf("%s", jsonSerialized)))
 			if errEnc != nil {
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("Publish error: %s", errEnc.Error()))
-				logMu.Unlock()
 				sendErrorResponse(errorChannel, channel, fmt.Sprintf("error in serializing: %s", errEnc))
 			} else {
 				pub.sendPublishRequest(channel, publishURLBuffer.String(),
@@ -1413,16 +1362,12 @@ func (pub *Pubnub) sendSubscribeResponse(channel, source, timetoken string,
 	}
 
 	if !found {
-		logMu.Lock()
 		errorLogger.Printf("Subscription item for %s response not found: %s\n",
 			stringResponseType(tp), itemName)
-		logMu.Unlock()
 		return
 	}
 
-	logMu.Lock()
 	infoLogger.Println(fmt.Sprintf("Response value: %#v", value))
-	logMu.Unlock()
 
 	item.SuccessChannel <- successResponse{
 		Data:      response,
@@ -1439,9 +1384,7 @@ func (pub *Pubnub) sendSuccessResponse(channels, groups string, response []byte)
 	for _, itemName := range splitItems(channels) {
 		channel, found := pub.channels.Get(itemName)
 		if !found {
-			logMu.Lock()
 			errorLogger.Printf("Channel '%s' not found\n", itemName)
-			logMu.Unlock()
 		}
 
 		channel.SuccessChannel <- response
@@ -1450,9 +1393,7 @@ func (pub *Pubnub) sendSuccessResponse(channels, groups string, response []byte)
 	for _, itemName := range splitItems(groups) {
 		group, found := pub.channels.Get(itemName)
 		if !found {
-			logMu.Lock()
 			errorLogger.Printf("Group '%s' not found\n", itemName)
-			logMu.Unlock()
 		}
 
 		group.SuccessChannel <- response
@@ -1467,9 +1408,7 @@ func sendSuccessResponseToChannel(channel chan<- []byte, items,
 
 	value := strings.Replace(response, presenceSuffix, "", -1)
 
-	logMu.Lock()
 	infoLogger.Println(fmt.Sprintf("Response value without channel: %s", value))
-	logMu.Unlock()
 
 	for i := 0; i < ln; i++ {
 		if channel != nil {
@@ -1482,9 +1421,7 @@ func sendSuccessResponseToChannel(channel chan<- []byte, items,
 func sendResponseWithoutChannel(channel chan<- []byte, response string) {
 	value := fmt.Sprintf("[0, \"%s\"]", response)
 
-	logMu.Lock()
 	infoLogger.Println(fmt.Sprintf("Response value without channel: %s", value))
-	logMu.Unlock()
 
 	if channel != nil {
 		channel <- []byte(value)
@@ -1542,9 +1479,7 @@ func sendErrorResponse(errorChannel chan<- []byte, items, message string) {
 	for _, item := range splitItems(items) {
 		value := fmt.Sprintf("[0, \"%s\", \"%s\"]", message, item)
 
-		logMu.Lock()
 		infoLogger.Println(fmt.Sprintf("Response value: %s", value))
-		logMu.Unlock()
 
 		if errorChannel != nil {
 			errorChannel <- []byte(value)
@@ -1559,9 +1494,7 @@ func sendErrorResponseExtended(errorChannel chan<- []byte, items, message,
 	for _, item := range splitItems(items) {
 		value := fmt.Sprintf("[0, \"%s\", %s, \"%s\"]", message, details, item)
 
-		logMu.Lock()
 		infoLogger.Println(fmt.Sprintf("Response value: %s", value))
-		logMu.Unlock()
 
 		if errorChannel != nil {
 			errorChannel <- []byte(value)
@@ -1737,9 +1670,7 @@ func (pub *Pubnub) checkForTimeoutAndRetries(err error,
 		sleepForAWhile(true)
 		message := fmt.Sprintf("Error %s, Retry count: %s", err.Error(), strconv.Itoa(retryCountLocal))
 
-		logMu.Lock()
 		errorLogger.Println(message)
-		logMu.Unlock()
 
 		pub.sendSubscribeErrorExtended(subChannels, subChannelGroups,
 			err.Error(), message, responseAsIsError)
@@ -1748,9 +1679,7 @@ func (pub *Pubnub) checkForTimeoutAndRetries(err error,
 		sleepForAWhile(false)
 		message := strconv.Itoa(retryCountLocal)
 
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s %s:", err.Error(), message))
-		logMu.Unlock()
 
 		pub.sendSubscribeError(subChannels, subChannelGroups, message, responseTimedOut)
 
@@ -1760,9 +1689,7 @@ func (pub *Pubnub) checkForTimeoutAndRetries(err error,
 		sleepForAWhile(true)
 		message := strconv.Itoa(retryCountLocal)
 
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s %s:", err.Error(), message))
-		logMu.Unlock()
 
 		pub.sendSubscribeError(subChannels, subChannelGroups, message, responseInternetConnIssues)
 		bRet = true
@@ -1823,9 +1750,7 @@ func (pub *Pubnub) retryLoop(errorChannel chan<- []byte) {
 			retryCountMu.RUnlock()
 
 			if (err != nil) && (responseCode != 403) && (retryCountLocal <= 0) {
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("%s, response code: %d:", err.Error(), responseCode))
-				logMu.Unlock()
 
 				pub.checkForTimeoutAndRetries(err, errorChannel)
 				pub.CloseExistingConnection()
@@ -1885,9 +1810,7 @@ func (pub *Pubnub) createPresenceHeartbeatURL() string {
 	pub.RUnlock()
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("createPresenceHeartbeatURL %s", err.Error()))
-		logMu.Unlock()
 	} else {
 		userState := string(jsonSerialized)
 		if (strings.TrimSpace(userState) != "") && (userState != "null") {
@@ -1910,9 +1833,7 @@ func (pub *Pubnub) runPresenceHeartbeat() {
 	pub.RUnlock()
 
 	if isPresenceHeartbeatRunning {
-		logMu.Lock()
 		infoLogger.Println(fmt.Sprintf("Presence heartbeat already running"))
-		logMu.Unlock()
 
 		return
 	}
@@ -1936,9 +1857,7 @@ func (pub *Pubnub) runPresenceHeartbeat() {
 			pub.isPresenceHeartbeatRunning = false
 			pub.Unlock()
 
-			logMu.Lock()
 			infoLogger.Println(fmt.Sprintf("Breaking out of presence heartbeat loop"))
-			logMu.Unlock()
 
 			pub.closePresenceHeartbeatConnection()
 			break
@@ -1950,18 +1869,12 @@ func (pub *Pubnub) runPresenceHeartbeat() {
 
 		if (responseCode != 200) || (err != nil) {
 			if err != nil {
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("presence heartbeat err %s", err.Error()))
-				logMu.Unlock()
 			} else {
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("presence heartbeat err responseCode %d", responseCode))
-				logMu.Unlock()
 			}
 		} else if string(value) != "" {
-			logMu.Lock()
 			infoLogger.Println(fmt.Sprintf("Presence Heartbeat %s", string(value)))
-			logMu.Unlock()
 		}
 		time.Sleep(time.Duration(pub.GetPresenceHeartbeatInterval()) * time.Second)
 	}
@@ -2008,9 +1921,7 @@ func (pub *Pubnub) startSubscribeLoop(channels, groups string,
 			// if response is error
 			if (responseCode != 200) || (err != nil) {
 				if err != nil {
-					logMu.Lock()
 					errorLogger.Println(fmt.Sprintf("%s, response code: %d:", err.Error(), responseCode))
-					logMu.Unlock()
 
 					bNonTimeout, bTimeOut := pub.checkForTimeoutAndRetries(err, errorChannel)
 
@@ -2051,9 +1962,7 @@ func (pub *Pubnub) startSubscribeLoop(channels, groups string,
 					}
 					// if unknown error occured
 				} else {
-					logMu.Lock()
 					errorLogger.Println(fmt.Sprintf("response code: %d:", responseCode))
-					logMu.Unlock()
 
 					if responseCode != 403 {
 						pub.resetRetryAndSendResponse()
@@ -2070,9 +1979,7 @@ func (pub *Pubnub) startSubscribeLoop(channels, groups string,
 				// if response was successfull
 			} else if string(value) != "" {
 
-				logMu.Lock()
 				infoLogger.Println(fmt.Sprintf("response value: %s", string(value)))
-				logMu.Unlock()
 
 				pub.handleSubscribeResponse(value, sentTimeToken,
 					alreadySubscribedChannels, alreadySubscribedChannelGroups)
@@ -2110,18 +2017,14 @@ func (pub *Pubnub) createSubscribeURL(sentTimeToken string) (string, string) {
 	subscribeURLBuffer.WriteString("/0")
 
 	if pub.resetTimeToken {
-		logMu.Lock()
 		infoLogger.Println("resetTimeToken=true")
-		logMu.Unlock()
 		subscribeURLBuffer.WriteString("/0")
 		sentTimeToken = "0"
 		pub.sentTimeToken = "0"
 		pub.resetTimeToken = false
 	} else {
 		subscribeURLBuffer.WriteString("/")
-		logMu.Lock()
 		infoLogger.Println("resetTimeToken=false")
-		logMu.Unlock()
 		if strings.TrimSpace(pub.timeToken) == "" {
 			pub.timeToken = "0"
 			pub.sentTimeToken = "0"
@@ -2153,9 +2056,7 @@ func (pub *Pubnub) createSubscribeURL(sentTimeToken string) (string, string) {
 
 	jsonSerialized, err := json.Marshal(pub.userState)
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("createSubscribeURL err: %s", err.Error()))
-		logMu.Unlock()
 	} else {
 		userState := string(jsonSerialized)
 		if (strings.TrimSpace(userState) != "") && (userState != "null") {
@@ -2233,9 +2134,7 @@ func (pub *Pubnub) handleSubscribeResponse(response []byte,
 				connectionConnected)
 		}
 	} else if errJSON != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s", errJSON.Error()))
-		logMu.Unlock()
 
 		pub.sendSubscribeError(strings.Join(channelNames, ","),
 			strings.Join(groupNames, ","), fmt.Sprintf("%s", errJSON),
@@ -2255,9 +2154,7 @@ func (pub *Pubnub) handleSubscribeResponse(response []byte,
 			}
 
 			if len(channelNames) == 0 {
-				logMu.Lock()
 				errorLogger.Printf("Unable to handle response: %s", data)
-				logMu.Unlock()
 				return
 			}
 		}
@@ -2268,11 +2165,9 @@ func (pub *Pubnub) handleSubscribeResponse(response []byte,
 
 		for i, message := range data {
 			if channelNames[i] == "" {
-				logMu.Lock()
 				errorLogger.Println(
 					fmt.Sprintf("Requested index %dout of range in %s. Raw response: %s",
 						i, channelNames, data))
-				logMu.Unlock()
 
 				continue
 			}
@@ -2311,26 +2206,22 @@ func (pub *Pubnub) handleFourElementsSubscribeResponse(message []byte,
 			!strings.HasSuffix(fourth, presenceSuffix) {
 			pub.sendSubscribeResponse(fourth, third, timetoken, wildcardResponse, responseAsIs, message)
 		} else {
-			logMu.Lock()
 			errorLogger.Println(
 				"Unable to handle four-element response, please contact PubNub support with error description:",
 				"\n3rd element:", third,
 				"\n4th element:", fourth,
 			)
-			logMu.Unlock()
 			pub.sendSubscribeError(subscribedChannels, subscribedGroups,
 				"Unable to handle response", responseAsIsError)
 		}
 	} else if third != fourth && thirdChannelGroupExist {
 		pub.sendSubscribeResponse(fourth, third, timetoken, channelGroupResponse, responseAsIs, message)
 	} else {
-		logMu.Lock()
 		errorLogger.Println(
 			"Unable to handle four-element response, please contact PubNub support with error description:",
 			"\n3rd element:", third,
 			"\n4th element:", fourth,
 		)
-		logMu.Unlock()
 		pub.sendSubscribeError(subscribedChannels, subscribedGroups,
 			"Unable to handle response", responseAsIsError)
 	}
@@ -2341,9 +2232,7 @@ func (pub *Pubnub) CloseExistingConnection() {
 	subscribeTransportMu.Lock()
 	defer subscribeTransportMu.Unlock()
 	if subscribeConn != nil {
-		logMu.Lock()
 		infoLogger.Println(fmt.Sprintf("closing subscribe conn"))
-		logMu.Unlock()
 		subscribeConn.Close()
 	}
 }
@@ -2357,9 +2246,7 @@ func checkCallbackNil(channelToCheck chan<- []byte, isErrChannel bool, funcName 
 			message2 = "Error "
 		}
 		message := fmt.Sprintf("%sCallback is nil for %s", message2, funcName)
-		logMu.Lock()
 		errorLogger.Println(message)
-		logMu.Unlock()
 		panic(message)
 	}
 }
@@ -2575,9 +2462,7 @@ func (pub *Pubnub) Unsubscribe(channels string, callbackChannel, errorChannel ch
 		if strings.TrimSpace(unsubscribeChannels) != "" {
 			value, _, err := pub.sendLeaveRequest(unsubscribeChannels, "")
 			if err != nil {
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-				logMu.Unlock()
 
 				sendErrorResponse(errorChannel, unsubscribeChannels, err.Error())
 			} else {
@@ -2626,9 +2511,7 @@ func (pub *Pubnub) ChannelGroupUnsubscribe(groups string, callbackChannel,
 		if strings.TrimSpace(unsubscribeGroups) != "" {
 			value, _, err := pub.sendLeaveRequest("", unsubscribeGroups)
 			if err != nil {
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-				logMu.Unlock()
 
 				sendErrorResponse(errorChannel, unsubscribeGroups, err.Error())
 			} else {
@@ -2783,16 +2666,12 @@ func (pub *Pubnub) executeHistory(channel string, limit int, start int64, end in
 	value, _, err := pub.httpRequest(historyURLBuffer.String(), nonSubscribeTrans)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-		logMu.Unlock()
 		sendErrorResponse(errorChannel, channel, err.Error())
 	} else {
 		data, returnOne, returnTwo, errJSON := ParseJSON(value, pub.cipherKey)
 		if errJSON != nil && strings.Contains(errJSON.Error(), invalidJSON) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("%s", errJSON.Error()))
-			logMu.Unlock()
 			sendErrorResponse(errorChannel, channel, errJSON.Error())
 			if count < maxRetries {
 				count++
@@ -2859,17 +2738,13 @@ func (pub *Pubnub) executeWhereNow(uuid string, callbackChannel chan []byte, err
 	value, _, err := pub.httpRequest(whereNowURL.String(), nonSubscribeTrans)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-		logMu.Unlock()
 		sendErrorResponse(errorChannel, "", err.Error())
 	} else {
 		//Parsejson
 		_, _, _, errJSON := ParseJSON(value, pub.cipherKey)
 		if errJSON != nil && strings.Contains(errJSON.Error(), invalidJSON) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("%s", errJSON.Error()))
-			logMu.Unlock()
 			sendErrorResponse(errorChannel, "", errJSON.Error())
 			if count < maxRetries {
 				count++
@@ -2938,17 +2813,13 @@ func (pub *Pubnub) executeGlobalHereNow(showUuid bool, includeUserState bool, ca
 	value, _, err := pub.httpRequest(hereNowURL.String(), nonSubscribeTrans)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-		logMu.Unlock()
 		sendErrorResponse(errorChannel, "", err.Error())
 	} else {
 		//Parsejson
 		_, _, _, errJSON := ParseJSON(value, pub.cipherKey)
 		if errJSON != nil && strings.Contains(errJSON.Error(), invalidJSON) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("%s", errJSON.Error()))
-			logMu.Unlock()
 			sendErrorResponse(errorChannel, "", errJSON.Error())
 			if count < maxRetries {
 				count++
@@ -3022,17 +2893,13 @@ func (pub *Pubnub) executeHereNow(channel string, showUuid bool, includeUserStat
 	value, _, err := pub.httpRequest(hereNowURL.String(), nonSubscribeTrans)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-		logMu.Unlock()
 		sendErrorResponse(errorChannel, "", err.Error())
 	} else {
 		//Parsejson
 		_, _, _, errJSON := ParseJSON(value, pub.cipherKey)
 		if errJSON != nil && strings.Contains(errJSON.Error(), invalidJSON) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("%s", errJSON.Error()))
-			logMu.Unlock()
 			sendErrorResponse(errorChannel, "", errJSON.Error())
 			if count < maxRetries {
 				count++
@@ -3090,17 +2957,13 @@ func (pub *Pubnub) executeGetUserState(channel string, callbackChannel chan []by
 	value, _, err := pub.httpRequest(userStateURL.String(), nonSubscribeTrans)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-		logMu.Unlock()
 		sendErrorResponse(errorChannel, "", err.Error())
 	} else {
 		//Parsejson
 		_, _, _, errJSON := ParseJSON(value, pub.cipherKey)
 		if errJSON != nil && strings.Contains(errJSON.Error(), invalidJSON) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("%s", errJSON.Error()))
-			logMu.Unlock()
 			sendErrorResponse(errorChannel, "", errJSON.Error())
 			if count < maxRetries {
 				count++
@@ -3161,9 +3024,7 @@ func (pub *Pubnub) SetUserStateKeyVal(channel string, key string, val string, ca
 	}
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("SetUserStateKeyVal err: %s", err.Error()))
-		logMu.Unlock()
 		sendErrorResponseExtended(errorChannel, channel, invalidUserStateMap, err.Error())
 		return
 	}
@@ -3240,17 +3101,13 @@ func (pub *Pubnub) executeSetUserState(channel string, jsonState string, callbac
 	value, _, err := pub.httpRequest(userStateURL.String(), nonSubscribeTrans)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-		logMu.Unlock()
 		sendErrorResponse(errorChannel, channel, err.Error())
 	} else {
 		//Parsejson
 		_, _, _, errJSON := ParseJSON(value, pub.cipherKey)
 		if errJSON != nil && strings.Contains(errJSON.Error(), invalidJSON) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("%s", errJSON.Error()))
-			logMu.Unlock()
 			sendErrorResponse(errorChannel, channel, errJSON.Error())
 			if count < maxRetries {
 				count++
@@ -3335,16 +3192,12 @@ func (pub *Pubnub) executeChannelGroup(action, group, channel string,
 	value, _, err := pub.httpRequest(requestURL.String(), nonSubscribeTrans)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-		logMu.Unlock()
 		sendErrorResponse(errorChannel, channel, err.Error())
 	} else {
 		_, _, _, errJSON := ParseJSON(value, pub.cipherKey)
 		if errJSON != nil && strings.Contains(errJSON.Error(), invalidJSON) {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("%s", errJSON.Error()))
-			logMu.Unlock()
 			sendErrorResponse(errorChannel, channel, errJSON.Error())
 		} else {
 			callbackChannel <- []byte(fmt.Sprintf("%s", value))
@@ -3368,9 +3221,7 @@ func getData(rawData interface{}, cipherKey string) string {
 		if err == nil {
 			return string(jsonData)
 		}
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("%s", err.Error()))
-		logMu.Unlock()
 		return fmt.Sprintf("%s", vv[0])
 	case []interface{}:
 		retval := parseInterface(vv, cipherKey)
@@ -3409,9 +3260,7 @@ func parseInterface(vv []interface{}, cipherKey string) string {
 				intf = u
 				unescapeVal, unescapeErr := url.QueryUnescape(intf.(string))
 				if unescapeErr != nil {
-					logMu.Lock()
 					errorLogger.Println(fmt.Sprintf("unescape :%s", unescapeErr.Error()))
-					logMu.Unlock()
 
 					vv[i] = intf
 				} else {
@@ -3427,9 +3276,7 @@ func parseInterface(vv []interface{}, cipherKey string) string {
 		if err == nil {
 			return string(jsonData)
 		}
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("parseInterface: %s", err.Error()))
-		logMu.Unlock()
 
 		return fmt.Sprintf("%s", vv)
 	}
@@ -3501,9 +3348,7 @@ func ParseJSON(contents []byte,
 			}
 		}
 	} else {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("Invalid json:%s", string(contents)))
-		logMu.Unlock()
 		err = fmt.Errorf(invalidJSON)
 	}
 	return returnData, returnOne, returnTwo, err
@@ -3534,9 +3379,7 @@ func ParseSubscribeResponse(rawResponse []byte, cipherKey string) (
 	err = json.Unmarshal(rawResponse, &response)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("Invalid json:%s", string(rawResponse)))
-		logMu.Unlock()
 
 		err = fmt.Errorf(invalidJSON)
 		return
@@ -3628,17 +3471,13 @@ func ParseInterfaceData(myInterface interface{}) string {
 // error if any.
 func (pub *Pubnub) httpRequest(requestURL string, action int) ([]byte, int, error) {
 	requrl := pub.origin + requestURL
-	logMu.Lock()
 	infoLogger.Println(fmt.Sprintf("url: %s", requrl))
-	logMu.Unlock()
 
 	contents, responseStatusCode, err := pub.connect(requrl, action, requestURL)
 
 	if err != nil {
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("httpRequest error: %s", err.Error()))
 		//errorLogger.Println(fmt.Sprintf("httpRequest responseStatusCode: %d", responseStatusCode))
-		logMu.Unlock()
 		if strings.Contains(err.Error(), timeout) {
 			return nil, responseStatusCode, fmt.Errorf(operationTimeout)
 		} else if strings.Contains(fmt.Sprintf("%s", err.Error()), closedNetworkConnection) {
@@ -3740,48 +3579,36 @@ func (pub *Pubnub) initTrans(action int) http.RoundTripper {
 					deadline := time.Now().Add(time.Duration(subscribeTimeout) * time.Second)
 					c.SetDeadline(deadline)
 					subscribeConn = c
-					logMu.Lock()
 					infoLogger.Println(fmt.Sprintf("subscribeConn set"))
-					logMu.Unlock()
 				case nonSubscribeTrans:
 					nonSubscribeTransportMu.Lock()
 					defer nonSubscribeTransportMu.Unlock()
 					deadline := time.Now().Add(time.Duration(nonSubscribeTimeout) * time.Second)
 					c.SetDeadline(deadline)
 					conn = c
-					logMu.Lock()
 					infoLogger.Println(fmt.Sprintf("non subscribeConn set"))
-					logMu.Unlock()
 				case retryTrans:
 					retryTransportMu.Lock()
 					defer retryTransportMu.Unlock()
 					deadline := time.Now().Add(time.Duration(retryInterval) * time.Second)
 					c.SetDeadline(deadline)
 					retryConn = c
-					logMu.Lock()
 					infoLogger.Println(fmt.Sprintf("retry conn set"))
-					logMu.Unlock()
 				case presenceHeartbeatTrans:
 					presenceHeartbeatTransportMu.Lock()
 					defer presenceHeartbeatTransportMu.Unlock()
 					deadline := time.Now().Add(time.Duration(pub.GetPresenceHeartbeatInterval()) * time.Second)
 					c.SetDeadline(deadline)
 					presenceHeartbeatConn = c
-					logMu.Lock()
 					infoLogger.Println(fmt.Sprintf("presenceHeartbeatConn set"))
-					logMu.Unlock()
 				}
 			} else {
 				err = fmt.Errorf("%s%s", errorInInitializing, err.Error())
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("httpRequest: %s", err.Error()))
-				logMu.Unlock()
 			}
 
 			if err != nil {
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("err: %s", err.Error()))
-				logMu.Unlock()
 				return nil, err
 			}
 
@@ -3793,9 +3620,7 @@ func (pub *Pubnub) initTrans(action int) http.RoundTripper {
 		if err == nil {
 			transport.Proxy = http.ProxyURL(proxyURL)
 		} else {
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("Error in connecting to proxy: %s", err.Error()))
-			logMu.Unlock()
 		}
 	}
 	transport.MaxIdleConnsPerHost = maxIdleConnsPerHost
@@ -3871,28 +3696,20 @@ func (pub *Pubnub) connect(requestURL string, action int, opaqueURL string) ([]b
 				bodyContents, e := ioutil.ReadAll(response.Body)
 				if e == nil {
 					contents = bodyContents
-					logMu.Lock()
 					infoLogger.Println(fmt.Sprintf("opaqueURL %s", opaqueURL))
 					infoLogger.Println(fmt.Sprintf("response: %s", string(contents)))
-					logMu.Unlock()
 					return contents, response.StatusCode, nil
 				}
 				return nil, response.StatusCode, e
 			}
 			if response != nil {
-				logMu.Lock()
 				errorLogger.Println(fmt.Sprintf("httpRequest: %s, response.StatusCode: %d", err.Error(), response.StatusCode))
-				logMu.Unlock()
 				return nil, response.StatusCode, err
 			}
-			logMu.Lock()
 			errorLogger.Println(fmt.Sprintf("httpRequest: %s", err.Error()))
-			logMu.Unlock()
 			return nil, 0, err
 		}
-		logMu.Lock()
 		errorLogger.Println(fmt.Sprintf("httpRequest: %s", err.Error()))
-		logMu.Unlock()
 		return nil, 0, err
 	}
 
