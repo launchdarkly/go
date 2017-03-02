@@ -1174,16 +1174,15 @@ func (pub *Pubnub) readPublishResponseAndCallSendResponse(channel string, value 
 		if (value != nil) && (responseCode > 0) {
 			var s []interface{}
 			errJSON := json.Unmarshal(value, &s)
-
-			if (errJSON == nil) && (len(s) > 0) {
+			if errJSON != nil {
+				pub.infoLogger.Printf("ERROR: Publish Error: %s", errJSON.Error())
+				pub.sendErrorResponseExtended(errorChannel, channel, string(value), strconv.Itoa(responseCode))
+			} else if len(s) > 0 {
 				if message, ok := s[1].(string); ok {
 					pub.sendErrorResponseExtended(errorChannel, channel, message, strconv.Itoa(responseCode))
 				} else {
 					pub.sendErrorResponseExtended(errorChannel, channel, string(value), strconv.Itoa(responseCode))
 				}
-			} else {
-				pub.infoLogger.Printf("ERROR: Publish Error: %s", errJSON.Error())
-				pub.sendErrorResponseExtended(errorChannel, channel, string(value), strconv.Itoa(responseCode))
 			}
 		} else if (err != nil) && (responseCode > 0) {
 			pub.infoLogger.Printf("ERROR: Publish Failed: %s, ResponseCode: %d", err.Error(), responseCode)
